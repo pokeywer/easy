@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<title>💣 Minesweeper</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+:root{
+  --bg:#1a1a2e;--surface:#16213e;--border:#0f3460;--accent:#e94560;
+  --text:#eee;--text2:#aaa;--text3:#666;
+  --cell:#0f3460;--cell-border:#1a4a8a;--cell-rev:#0a1628;
+  --cell-flag:#1e1040;--cell-flag-border:#7f3fbf;
+  --cell-q:#1e2840;--cell-q-border:#3f7fbf;
+  --cell-boom:#8b0000;--cell-boom-border:#ff0000;
+}
+body.light{
+  --bg:#e8f0fe;--surface:#fff;--border:#b0c4de;--accent:#c0002a;
+  --text:#111;--text2:#444;--text3:#999;
+  --cell:#c8d8ee;--cell-border:#a0b8d8;--cell-rev:#ddeeff;
+  --cell-flag:#ddd0f0;--cell-flag-border:#9060c0;
+  --cell-q:#d0e8f0;--cell-q-border:#60a0bf;
+  --cell-boom:#ffd0d0;--cell-boom-border:#ff0000;
+}
+
+html,body{height:100%;overflow:hidden;}
+
+body{
+  background:var(--bg);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  color:var(--text);
+  touch-action:none;
+  overflow:hidden;
+  height:100dvh;
+  max-height:100dvh;
+}
+
+#app{
+  display:flex;flex-direction:column;align-items:center;
+  width:100%;height:100dvh;max-height:100dvh;
+  overflow:hidden;padding:6px 4px 4px;
+  gap:4px;
+}
+
+h1{font-size:1.3rem;letter-spacing:2px;color:var(--accent);flex-shrink:0;}
+
+/* Top stats */
+#top-bar{
+  display:flex;gap:6px;width:100%;justify-content:center;flex-shrink:0;
+}
+.stat-box{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:4px 8px;flex:1;max-width:90px;
+  text-align:center;
+}
+.stat-box .lbl{font-size:0.6rem;color:var(--text3);letter-spacing:1px;text-transform:uppercase;}
+.stat-box .val{font-size:1rem;font-weight:700;}
+#timer-val{color:#0f9;}#mines-val{color:#f44;}
+#score-val{color:#ff0;}#best-val{color:#0af;}
+
+/* Progress */
+#progress{width:100%;max-width:500px;height:5px;background:var(--border);border-radius:3px;flex-shrink:0;overflow:hidden;}
+#progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),#ff9800);border-radius:3px;transition:width .3s;width:0%;}
+
+/* Difficulty tabs */
+#diff-row{
+  display:flex;gap:5px;width:100%;justify-content:center;flex-shrink:0;
+}
+.diff-btn{
+  background:var(--surface);color:var(--text2);
+  border:1px solid var(--border);border-radius:20px;
+  padding:5px 12px;font-size:0.75rem;cursor:pointer;flex:1;max-width:90px;
+  transition:background .15s,color .15s;
+}
+.diff-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+
+/* Action buttons */
+#action-row{
+  display:flex;gap:5px;width:100%;justify-content:center;flex-shrink:0;flex-wrap:wrap;
+}
+.act-btn{
+  background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-radius:8px;
+  padding:5px 10px;font-size:0.72rem;cursor:pointer;
+  transition:background .15s;
+}
+.act-btn:active{background:var(--border);}
+
+/* Board */
+#board-wrap{
+  overflow:auto;flex:1;min-height:0;
+  display:flex;align-items:center;justify-content:center;
+  width:100%;
+  -webkit-overflow-scrolling:touch;
+}
+#board{
+  display:inline-grid;gap:2px;
+  border:2px solid var(--border);border-radius:6px;
+  padding:4px;background:var(--surface);
+  user-select:none;
+}
+.cell{
+  border-radius:4px;display:flex;align-items:center;justify-content:center;
+  font-weight:bold;cursor:pointer;
+  background:var(--cell);border:1px solid var(--cell-border);
+  transition:background .1s;
+  position:relative;
+}
+.cell.revealed{background:var(--cell-rev);border-color:var(--cell-rev);cursor:default;}
+.cell.flagged{background:var(--cell-flag);border-color:var(--cell-flag-border);}
+.cell.question{background:var(--cell-q);border-color:var(--cell-q-border);}
+.cell.exploded{background:var(--cell-boom);border-color:var(--cell-boom-border);animation:boom .35s ease;}
+@keyframes boom{0%{transform:scale(1)}35%{transform:scale(1.45)}65%{transform:scale(.9)}100%{transform:scale(1)}}
+.cell.safe-reveal{animation:pop .18s ease;}
+@keyframes pop{0%{transform:scale(.7);opacity:.4}100%{transform:scale(1);opacity:1}}
+.cell.wrong-flag{background:#5c1010;border-color:#ff4444;}
+.cell.hint-glow{box-shadow:0 0 8px 3px #0f9;animation:hintpulse .6s 3;}
+@keyframes hintpulse{0%,100%{box-shadow:0 0 8px 3px #0f9}50%{box-shadow:0 0 16px 6px #0f9}}
+
+.n1{color:#4fc3f7}.n2{color:#81c784}.n3{color:#ef5350}
+.n4{color:#7986cb}.n5{color:#ff7043}.n6{color:#26c6da}
+.n7{color:#ec407a}.n8{color:#bdbdbd}
+
+/* Message */
+#message{
+  font-size:1rem;font-weight:700;min-height:24px;letter-spacing:2px;
+  text-align:center;flex-shrink:0;
+}
+.msg-win{color:#0f9;text-shadow:0 0 12px #0f9;}
+.msg-lose{color:#f44;text-shadow:0 0 12px #f44;}
+
+/* Bottom bar */
+#bottom-bar{
+  display:flex;gap:6px;align-items:center;justify-content:center;
+  flex-shrink:0;width:100%;padding-bottom:env(safe-area-inset-bottom,4px);
+}
+#flag-mode-btn{
+  background:var(--surface);border:2px solid var(--border);border-radius:50%;
+  width:44px;height:44px;font-size:1.2rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s,border-color .15s;flex-shrink:0;
+}
+#flag-mode-btn.on{background:#1e1040;border-color:#7f3fbf;}
+
+#bottom-hint{font-size:0.65rem;color:var(--text3);text-align:center;}
+
+/* Custom modal */
+#modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+  z-index:100;align-items:center;justify-content:center;
+}
+#modal-overlay.show{display:flex;}
+#modal{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:20px;min-width:260px;display:flex;flex-direction:column;gap:12px;
+}
+#modal h3{color:var(--accent);font-size:1rem;text-align:center;}
+.modal-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.85rem;}
+.modal-row input{
+  width:70px;background:var(--bg);color:var(--text);
+  border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:.85rem;
+}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+.modal-btns button{
+  background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:6px;padding:7px 16px;cursor:pointer;font-size:.85rem;
+}
+.modal-btns button.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+/* Leaderboard modal */
+#lb-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+  z-index:100;align-items:center;justify-content:center;
+}
+#lb-overlay.show{display:flex;}
+#lb-modal{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:16px;min-width:280px;max-width:95vw;max-height:80vh;overflow-y:auto;
+}
+#lb-modal h3{color:#0af;margin-bottom:10px;font-size:.95rem;letter-spacing:2px;}
+#lb-table{width:100%;font-size:.78rem;border-collapse:collapse;}
+#lb-table td{padding:4px 6px;}
+#lb-table tr:nth-child(even) td{background:rgba(255,255,255,.05);}
+.lb-rank{color:var(--text3);width:28px;}
+.lb-diff{color:#f90;}
+.lb-time{color:#0f9;}
+.lb-score{color:#ff0;}
+.lb-close{
+  margin-top:12px;width:100%;background:var(--border);color:var(--text);
+  border:none;border-radius:6px;padding:8px;cursor:pointer;font-size:.85rem;
+}
+
+/* Theme toggle */
+#theme-btn{
+  position:fixed;top:8px;right:8px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:20px;padding:4px 10px;font-size:0.7rem;cursor:pointer;color:var(--text2);
+  z-index:50;
+}
+</style>
+</head>
+<body>
+<button id="theme-btn" onclick="toggleTheme()">☀️</button>
+
+<div id="app">
+  <h1>💣 MINESWEEPER</h1>
+
+  <div id="top-bar">
+    <div class="stat-box"><div class="lbl">Mines</div><div class="val" id="mines-val">0</div></div>
+    <div class="stat-box"><div class="lbl">Time</div><div class="val" id="timer-val">0s</div></div>
+    <div class="stat-box"><div class="lbl">Score</div><div class="val" id="score-val">0</div></div>
+    <div class="stat-box"><div class="lbl">Best</div><div class="val" id="best-val">--</div></div>
+  </div>
+
+  <div id="progress"><div id="progress-bar"></div></div>
+
+  <div id="diff-row">
+    <button class="diff-btn" id="btn-easy"   onclick="setDiff('easy')">😊 Easy</button>
+    <button class="diff-btn" id="btn-medium" onclick="setDiff('medium')">😐 Med</button>
+    <button class="diff-btn" id="btn-hard"   onclick="setDiff('hard')">😰 Hard</button>
+    <button class="diff-btn" id="btn-custom" onclick="openCustom()">⚙️ Custom</button>
+  </div>
+
+  <div id="action-row">
+    <button class="act-btn" onclick="newGame()">🔄 New</button>
+    <button class="act-btn" onclick="undoReveal()">↩️ Undo</button>
+    <button class="act-btn" onclick="giveHint()">💡 Hint</button>
+    <button class="act-btn" onclick="autoSolveStep()">🤖 Solve</button>
+    <button class="act-btn" onclick="showLeaderboard()">🏆 LB</button>
+  </div>
+
+  <div id="board-wrap"><div id="board"></div></div>
+
+  <div id="message"></div>
+
+  <div id="bottom-bar">
+    <button id="flag-mode-btn" onclick="toggleFlagMode()" title="Toggle flag mode">🚩</button>
+    <div id="bottom-hint">Tap = reveal &nbsp;|&nbsp; Hold or 🚩 = flag</div>
+  </div>
+</div>
+
+<!-- Custom modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3>⚙️ Custom Game</h3>
+    <div class="modal-row"><label>Rows (5–30)</label><input type="number" id="c-rows" value="12" min="5" max="30"></div>
+    <div class="modal-row"><label>Cols (5–40)</label><input type="number" id="c-cols" value="16" min="5" max="40"></div>
+    <div class="modal-row"><label>Mines</label><input type="number" id="c-mines" value="30" min="1" max="400"></div>
+    <div class="modal-btns">
+      <button onclick="closeCustom()">Cancel</button>
+      <button class="primary" onclick="applyCustom()">Play</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leaderboard modal -->
+<div id="lb-overlay" onclick="if(event.target===this)closeLB()">
+  <div id="lb-modal">
+    <h3>🏆 LEADERBOARD</h3>
+    <table id="lb-table"></table>
+    <button class="lb-close" onclick="closeLB()">Close</button>
+    <button class="lb-close" style="margin-top:6px;background:#5c1010;" onclick="clearLB()">🗑️ Clear</button>
+  </div>
+</div>
+
+<script>
+const DIFFS={easy:{rows:9,cols:9,mines:10},medium:{rows:16,cols:16,mines:40},hard:{rows:16,cols:26,mines:80}};
+let rows,cols,mineCount,board=[],revealed=[],flagged=[],question=[];
+let gameState='idle',timerInterval=null,startTime=0,elapsed=0,score=0,firstClick=true;
+let currentDiff='medium',undoStack=[],flagMode=false;
+let longPressTimer=null,longPressCell=null,didLongPress=false;
+
+const $ = id => document.getElementById(id);
+
+function cell(r,c){return r*cols+c;}
+function inBounds(r,c){return r>=0&&r<rows&&c>=0&&c<cols;}
+function neighbors(r,c){
+  const res=[];
+  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)
+    if((dr||dc)&&inBounds(r+dr,c+dc))res.push([r+dr,c+dc]);
+  return res;
+}
+
+function setDiff(d){
+  currentDiff=d;
+  document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+  $('btn-'+d).classList.add('active');
+  if(d!=='custom'){rows=DIFFS[d].rows;cols=DIFFS[d].cols;mineCount=DIFFS[d].mines;newGame();}
+}
+
+function openCustom(){$('modal-overlay').classList.add('show');}
+function closeCustom(){$('modal-overlay').classList.remove('show');}
+function applyCustom(){
+  rows=Math.max(5,Math.min(30,+$('c-rows').value));
+  cols=Math.max(5,Math.min(40,+$('c-cols').value));
+  mineCount=Math.max(1,Math.min(rows*cols-9,+$('c-mines').value));
+  closeCustom();newGame();
+}
+
+function newGame(){
+  clearInterval(timerInterval);timerInterval=null;
+  elapsed=0;score=0;firstClick=true;undoStack=[];
+  const total=rows*cols;
+  board=new Array(total).fill(0);
+  revealed=new Array(total).fill(false);
+  flagged=new Array(total).fill(false);
+  question=new Array(total).fill(false);
+  gameState='idle';
+  $('timer-val').textContent='0s';
+  $('score-val').textContent='0';
+  $('message').textContent='';$('message').className='';
+  updateMineCount();updateProgress();renderBoard();updateBest();
+  calcCellSize();
+}
+
+function placeMines(safeR,safeC){
+  const safeSet=new Set(neighbors(safeR,safeC).concat([[safeR,safeC]]).map(([r,c])=>cell(r,c)));
+  let placed=0;
+  while(placed<mineCount){
+    const idx=Math.floor(Math.random()*rows*cols);
+    if(board[idx]!==-1&&!safeSet.has(idx)){board[idx]=-1;placed++;}
+  }
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)
+    if(board[cell(r,c)]!==-1)
+      board[cell(r,c)]=neighbors(r,c).filter(([nr,nc])=>board[cell(nr,nc)]===-1).length;
+}
+
+function startTimer(){
+  startTime=Date.now()-elapsed*1000;
+  timerInterval=setInterval(()=>{
+    elapsed=Math.floor((Date.now()-startTime)/1000);
+    $('timer-val').textContent=elapsed+'s';
+  },500);
+}
+
+// Dynamic cell size based on available space
+function calcCellSize(){
+  const wrap=$('board-wrap');
+  const maxW=wrap.clientWidth-16;
+  const maxH=wrap.clientHeight-16;
+  const byW=Math.floor((maxW-cols*2)/cols);
+  const byH=Math.floor((maxH-rows*2)/rows);
+  const size=Math.min(Math.max(byW,byH>byW?byH:0),44);
+  const s=Math.max(24,Math.min(size,44));
+  document.querySelectorAll('.cell').forEach(el=>{
+    el.style.width=s+'px';el.style.height=s+'px';
+    el.style.fontSize=(s<30?'0.7rem':s<36?'0.82rem':'0.92rem');
+  });
+}
+
+function renderBoard(){
+  const b=$('board');
+  b.style.gridTemplateColumns=`repeat(${cols},auto)`;
+  b.innerHTML='';
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const idx=cell(r,c);
+      const div=document.createElement('div');
+      div.className='cell';
+      div.dataset.r=r;div.dataset.c=c;
+      stylizeCell(div,idx);
+      attachEvents(div,r,c);
+      b.appendChild(div);
+    }
+  }
+  requestAnimationFrame(calcCellSize);
+}
+
+function attachEvents(div,r,c){
+  // Touch events for mobile
+  div.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    didLongPress=false;
+    longPressCell=[r,c];
+    longPressTimer=setTimeout(()=>{
+      didLongPress=true;
+      handleFlag(r,c);
+      vibrate(30);
+    },400);
+  },{passive:false});
+
+  div.addEventListener('touchend',e=>{
+    e.preventDefault();
+    clearTimeout(longPressTimer);
+    if(!didLongPress){
+      if(flagMode) handleFlag(r,c);
+      else handleClick(r,c);
+    }
+    didLongPress=false;
+  },{passive:false});
+
+  div.addEventListener('touchmove',e=>{
+    clearTimeout(longPressTimer);
+  },{passive:false});
+
+  // Mouse events for desktop
+  div.addEventListener('click',()=>{
+    if(flagMode) handleFlag(r,c);
+    else handleClick(r,c);
+  });
+  div.addEventListener('contextmenu',e=>{e.preventDefault();handleFlag(r,c);});
+  div.addEventListener('mousedown',e=>{if(e.button===1){e.preventDefault();handleChord(r,c);}});
+  div.addEventListener('dblclick',()=>handleChord(r,c));
+}
+
+function stylizeCell(el,idx){
+  el.className='cell';el.textContent='';
+  if(revealed[idx]){
+    el.classList.add('revealed');
+    const v=board[idx];
+    if(v===-1){el.textContent='💣';el.classList.add('exploded');}
+    else if(v>0){el.textContent=v;el.classList.add('n'+v);}
+    el.classList.add('safe-reveal');
+  } else if(flagged[idx]){
+    el.classList.add('flagged');el.textContent='🚩';
+  } else if(question[idx]){
+    el.classList.add('question');el.textContent='❓';
+  }
+}
+
+function updateCell(r,c){
+  const idx=cell(r,c);
+  const el=document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+  if(!el)return;
+  stylizeCell(el,idx);
+}
+
+function handleClick(r,c){
+  if(gameState==='won'||gameState==='lost')return;
+  const idx=cell(r,c);
+  if(revealed[idx]||flagged[idx])return;
+  if(gameState==='idle'){gameState='playing';placeMines(r,c);startTimer();}
+  firstClick=false;
+  saveUndo();revealCell(r,c);updateProgress();checkWin();
+}
+
+function handleFlag(r,c){
+  if(gameState==='won'||gameState==='lost')return;
+  const idx=cell(r,c);
+  if(revealed[idx])return;
+  if(!flagged[idx]&&!question[idx])flagged[idx]=true;
+  else if(flagged[idx]){flagged[idx]=false;question[idx]=true;}
+  else question[idx]=false;
+  updateCell(r,c);updateMineCount();
+}
+
+function handleChord(r,c){
+  const idx=cell(r,c);
+  if(!revealed[idx]||board[idx]<=0)return;
+  const nb=neighbors(r,c);
+  const flagCount=nb.filter(([nr,nc])=>flagged[cell(nr,nc)]).length;
+  if(flagCount!==board[idx])return;
+  saveUndo();
+  nb.forEach(([nr,nc])=>{if(!revealed[cell(nr,nc)]&&!flagged[cell(nr,nc)])revealCell(nr,nc);});
+  updateProgress();checkWin();
+}
+
+function revealCell(r,c){
+  const idx=cell(r,c);
+  if(revealed[idx]||flagged[idx])return;
+  revealed[idx]=true;
+  updateCell(r,c);
+  if(board[idx]===-1){
+    gameState='lost';clearInterval(timerInterval);timerInterval=null;
+    revealAllMines();showMessage('💥 BOOM! Game Over!','msg-lose');
+    addScore(-50);vibrate([100,50,200]);return;
+  }
+  addScore(10);
+  if(board[idx]===0)neighbors(r,c).forEach(([nr,nc])=>{if(!revealed[cell(nr,nc)])revealCell(nr,nc);});
+}
+
+function revealAllMines(){
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const idx=cell(r,c);
+    if(board[idx]===-1&&!revealed[idx]){revealed[idx]=true;flagged[idx]=false;updateCell(r,c);}
+    else if(flagged[idx]&&board[idx]!==-1){
+      const el=document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+      if(el){el.classList.add('wrong-flag');el.textContent='❌';}
+    }
+  }
+}
+
+function checkWin(){
+  const total=rows*cols;
+  for(let i=0;i<total;i++)if(!revealed[i]&&board[i]!==-1)return;
+  if(gameState!=='playing')return;
+  gameState='won';clearInterval(timerInterval);timerInterval=null;
+  const bonus=Math.max(0,500-elapsed*2)+mineCount*5;
+  addScore(bonus);
+  showMessage('🎉 YOU WIN! +'+bonus+' pts!','msg-win');
+  vibrate([50,30,50,30,200]);
+  saveToLeaderboard();updateBest();
+}
+
+function addScore(n){score=Math.max(0,score+n);$('score-val').textContent=score;}
+function updateMineCount(){$('mines-val').textContent=mineCount-flagged.filter(Boolean).length;}
+function updateProgress(){
+  const safe=rows*cols-mineCount;
+  const rev=revealed.filter(Boolean).length;
+  $('progress-bar').style.width=(safe>0?Math.min(100,(rev/safe)*100):0)+'%';
+}
+
+function showMessage(msg,cls){const el=$('message');el.textContent=msg;el.className=cls;}
+
+function saveUndo(){
+  undoStack.push({revealed:[...revealed],flagged:[...flagged],question:[...question],score,elapsed,gameState});
+  if(undoStack.length>5)undoStack.shift();
+}
+
+function undoReveal(){
+  if(!undoStack.length)return;
+  const s=undoStack.pop();
+  revealed=s.revealed;flagged=s.flagged;question=s.question;
+  score=s.score;gameState=s.gameState;
+  $('score-val').textContent=score;
+  if(gameState==='playing'&&!timerInterval)startTimer();
+  $('message').textContent='';$('message').className='';
+  renderBoard();updateMineCount();updateProgress();
+}
+
+function giveHint(){
+  if(gameState!=='playing'&&gameState!=='idle')return;
+  if(gameState==='idle'){showMessage('Start the game first!','');return;}
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const idx=cell(r,c);
+    if(!revealed[idx]&&!flagged[idx]&&board[idx]!==-1){
+      const el=document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+      if(el){el.classList.add('hint-glow');setTimeout(()=>el.classList.remove('hint-glow'),2000);}
+      return;
+    }
+  }
+}
+
+function autoSolveStep(){
+  if(gameState!=='playing')return;
+  let acted=false;
+  for(let r=0;r<rows&&!acted;r++)for(let c=0;c<cols&&!acted;c++){
+    const idx=cell(r,c);
+    if(!revealed[idx]||board[idx]<=0)continue;
+    const nb=neighbors(r,c);
+    const unrev=nb.filter(([nr,nc])=>!revealed[cell(nr,nc)]&&!flagged[cell(nr,nc)]);
+    const flags=nb.filter(([nr,nc])=>flagged[cell(nr,nc)]).length;
+    if(unrev.length+flags===board[idx]){
+      unrev.forEach(([nr,nc])=>{flagged[cell(nr,nc)]=true;updateCell(nr,nc);});
+      updateMineCount();acted=true;
+    } else if(flags===board[idx]&&unrev.length>0){
+      saveUndo();unrev.forEach(([nr,nc])=>revealCell(nr,nc));
+      updateProgress();checkWin();acted=true;
+    }
+  }
+  if(!acted)showMessage('🤖 No obvious moves.','');
+}
+
+function toggleFlagMode(){
+  flagMode=!flagMode;
+  const btn=$('flag-mode-btn');
+  btn.classList.toggle('on',flagMode);
+  $('bottom-hint').textContent=flagMode?'Tap = FLAG mode on 🚩':'Tap = reveal  |  Hold or 🚩 = flag';
+}
+
+function vibrate(pattern){if(navigator.vibrate)navigator.vibrate(pattern);}
+
+// Leaderboard
+function saveToLeaderboard(){
+  let lb=JSON.parse(localStorage.getItem('ms_lb')||'[]');
+  lb.push({diff:currentDiff,time:elapsed,score,date:new Date().toLocaleDateString()});
+  lb.sort((a,b)=>b.score-a.score||a.time-b.time);
+  lb=lb.slice(0,15);
+  localStorage.setItem('ms_lb',JSON.stringify(lb));
+}
+
+function showLeaderboard(){
+  const lb=JSON.parse(localStorage.getItem('ms_lb')||'[]');
+  const t=$('lb-table');
+  if(!lb.length){t.innerHTML='<tr><td colspan="5" style="color:#666">No records yet.</td></tr>';}
+  else t.innerHTML=lb.map((e,i)=>`<tr>
+    <td class="lb-rank">#${i+1}</td>
+    <td class="lb-diff">${e.diff}</td>
+    <td class="lb-time">${e.time}s</td>
+    <td class="lb-score">${e.score}pts</td>
+    <td style="color:var(--text3)">${e.date}</td>
+  </tr>`).join('');
+  $('lb-overlay').classList.add('show');
+}
+
+function closeLB(){$('lb-overlay').classList.remove('show');}
+
+function clearLB(){
+  localStorage.removeItem('ms_lb');
+  $('best-val').textContent='--';
+  showLeaderboard();
+}
+
+function updateBest(){
+  const lb=JSON.parse(localStorage.getItem('ms_lb')||'[]');
+  const best=lb.filter(e=>e.diff===currentDiff).sort((a,b)=>b.score-a.score)[0];
+  $('best-val').textContent=best?best.score+'pts':'--';
+}
+
+function toggleTheme(){
+  document.body.classList.toggle('light');
+  $('theme-btn').textContent=document.body.classList.contains('light')?'🌙':'☀️';
+}
+
+// Resize handler
+window.addEventListener('resize',()=>calcCellSize());
+
+// Init
+setDiff('medium');
+</script>
+</body>
+</html>
